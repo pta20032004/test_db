@@ -5,7 +5,7 @@ putenv("HSA_OVERRIDE_GFX_VERSION", "10.3.0")
 
 # Đường dẫn mô hình / Model paths
 PERSON_MODEL_PATH = 'yolo11n.pt'
-FACE_MODEL_PATH = 'yolo8n-face-640-50epochs.pt'
+FACE_MODEL_PATH = 'best.pt'
 
 # Thiết lập hiển thị / Visualization settings
 PERSON_COLOR = (0, 0, 255)  # Màu đỏ / Red color

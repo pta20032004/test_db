@@ -1,5 +1,5 @@
 from ultralytics import YOLO
-from config import PERSON_MODEL_PATH, FACE_MODEL_PATH
+from .config import PERSON_MODEL_PATH, FACE_MODEL_PATH
 
 def load_models():
     """Tải mô hình YOLO cho nhận diện người và khuôn mặt / Load YOLO models"""

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Face Tracking</title>
+    <style>
+        #videoContainer {
+            position: relative;
+            width: 960px;
+            height: 720px;
+        }
+        #webcam, #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="videoContainer">
+        <video id="webcam" width="960" height="720" autoplay></video>
+        <canvas id="overlay" width="960" height="720"></canvas>
+    </div>
+
+    <script>
+        const video = document.getElementById('webcam');
+        const overlay = document.getElementById('overlay');
+        const ctx = overlay.getContext('2d');
+
+        // Truy cập webcam / Access the webcam
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                video.srcObject = stream;
+                processFrames();
+            });
+
+        // Gửi frame và xử lý kết quả / Frame parsing and processing the result
+        async function processFrames() {
+            const canvas = document.createElement('canvas');
+            const tempCtx = canvas.getContext('2d');
+            canvas.width = 960;
+            canvas.height = 720;
+
+            while (true) {
+                // Chụp frame từ video / Frame snapshot
+                tempCtx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageData = canvas.toDataURL('image/jpeg');
+
+                // Gửi frame đến backend / Parse the frame to backend
+                const blob = await fetch(imageData).then(res => res.blob());
+                const formData = new FormData();
+                formData.append('file', blob, 'frame.jpg');
+
+                const response = await fetch('http://localhost:8000/process_frame', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                // Nhận metadata và vẽ khung / Receive the metadata and draw boxes
+                const result = await response.json();
+                drawBoxes(result.person_boxes, result.face_boxes);
+                
+                // Giới hạn FPS để giảm tải / FPS limiting | desired_fps = 1000 / timeout_target
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
+        }
+
+        // Vẽ bounding boxes
+        function drawBoxes(personBoxes, faceBoxes) {
+            ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+            // Vẽ bounding box cho người (màu đỏ) / Draw person boxes (red)
+            personBoxes.forEach(box => {
+                const [x1, y1, x2, y2] = box.coords;
+                ctx.strokeStyle = '#FF0000'; // Màu đỏ
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+                
+                // Nhãn class và độ tin cậy / display class and confidence
+                ctx.fillStyle = '#FF0000';
+                ctx.font = '14px Arial';
+                ctx.fillText(`Person ${box.confidence.toFixed(2)}`, x1, y1 - 5);
+            });
+
+            // Vẽ bounding box cho mặt (màu xanh) / Draw face boxes
+            faceBoxes.forEach(box => {
+                const [x1, y1, x2, y2] = box.coords;
+                ctx.strokeStyle = '#00FF00'; // Màu xanh
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+                
+                // Nhãn class và độ tin cậy / display class and confidence
+                ctx.fillStyle = '#00FF00';
+                ctx.font = '14px Arial';
+                ctx.fillText(`Face ${box.confidence.toFixed(2)}`, x1, y1 - 5);
+            });
+        }
+    </script>
+</body>
+</html>

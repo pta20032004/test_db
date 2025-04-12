@@ -1,5 +1,5 @@
 import numpy as np
-from models import load_models
+from .models import load_models
 
 class Detector:
     """Xử lý nhận diện người và khuôn mặt / Detection handler"""
@@ -47,19 +47,24 @@ class Detector:
         6. Return the number of persons, the number of faces, and the list of face bounding boxes.
         """
         # Nhận diện người / Detect persons
-        person_results = self.person_model(frame, classes=[0], conf=0.5, half=False, verbose=False)
+        person_results = self.person_model(frame, classes=[0], conf=0.3, half=False, verbose=False)
         
         person_count = 0
         face_count = 0
         annotated_frame = frame.copy()
         face_boxes = []  # Danh sách khung khuôn mặt / Face boxes list
+        person_boxes = []
         
         if person_results:
             for person in person_results:
                 # Lấy tọa độ khung người / Get person boxes
                 boxes = person.boxes.xyxy.cpu().numpy() #boxes is a numpy array with shape (n,4)
+                confs = person.boxes.conf.cpu().numpy() #confidence for person box
                 person_count += len(boxes)
-                annotated_frame = person.plot()  # Vẽ khung lên ảnh / Draw boxes
+
+                for box, conf in zip(boxes, confs):
+                    x1, y1, x2, y2 = map(int, box)
+                    person_boxes.append(((x1, y1, x2, y2), float(conf)))
                 
                 # Chuẩn bị vùng quan tâm (ROI) / Prepare ROIs
                 valid_rois, valid_indices = self._prepare_rois(frame, boxes)
@@ -68,7 +73,7 @@ class Detector:
                 face_count += face_data["count"]
                 face_boxes.extend(face_data["boxes"])
         
-        return annotated_frame, person_count, face_count, face_boxes
+        return person_count, face_count, person_boxes, face_boxes
     
     def _prepare_rois(self, frame, boxes):
         """
@@ -151,7 +156,7 @@ class Detector:
         face_boxes = []
         face_count = 0
         if rois:
-            face_results = self.face_model(rois, stream=True, conf=0.5, imgsz=160, half=False, verbose=False)
+            face_results = self.face_model(rois, stream=True, conf=0.3, imgsz=160, half=False, verbose=False)
             for idx, face in enumerate(face_results):
                 if len(face.boxes) > 0:
                     face_count += len(face.boxes)

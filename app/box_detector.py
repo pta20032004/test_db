@@ -47,7 +47,7 @@ class Detector:
         6. Return the number of persons, the number of faces, and the list of face bounding boxes.
         """
         # Nhận diện người / Detect persons
-        person_results = self.person_model(frame, classes=[0], conf=0.3, half=True, verbose=False)
+        person_results = self.person_model(frame, classes=[0], conf=0.3, imgsz=640, half=True, verbose=False)
         
         person_count = 0
         face_count = 0
@@ -156,7 +156,7 @@ class Detector:
         face_boxes = []
         face_count = 0
         if rois:
-            face_results = self.face_model(rois, stream=True, conf=0.3, imgsz=160, half=True, verbose=False)
+            face_results = self.face_model(rois, stream=True, conf=0.3, imgsz=320, half=True, verbose=False)
             for idx, face in enumerate(face_results):
                 if len(face.boxes) > 0:
                     face_count += len(face.boxes)

@@ -369,7 +369,17 @@
     </div>
 
     <script>
-        // Khởi tạo các biến toàn cục
+        // Biến toàn cục quản lý trạng thái ứng dụng
+        const appState = {
+            isRunning: false,
+            isProcessing: false,
+            processingTimerId: null,
+            fpsTimerId: null,
+            personBoxes: [],
+            faceBoxes: []
+        };
+        
+        // Khởi tạo các phần tử DOM
         const video = document.getElementById('webcam');
         const overlay = document.getElementById('overlay');
         const ctx = overlay.getContext('2d');
@@ -385,11 +395,8 @@
         const toggleConfidence = document.getElementById('toggleConfidence');
         
         let stream = null;
-        let isProcessing = false;
-        let animationFrameId = null;
         let lastFrameTime = performance.now();
         let frameCount = 0;
-        let fpsUpdateTimer = null;
         
         // Các cài đặt giao diện
         const settings = {
@@ -406,7 +413,14 @@
         document.addEventListener('DOMContentLoaded', async () => {
             await loadCameras();
             setupEventListeners();
+            
+            // Vô hiệu hóa nút dừng khi khởi động
+            stopButton.disabled = true;
+            
             loadingOverlay.classList.add('hidden');
+            
+            // Khởi tạo canvas
+            resetCanvas();
         });
         
         // Lấy danh sách camera
@@ -440,18 +454,73 @@
             
             togglePerson.addEventListener('change', () => {
                 settings.showPersons = togglePerson.checked;
+                if (appState.isRunning) {
+                    // Vẽ lại ngay lập tức với cài đặt mới
+                    drawDetections(appState.personBoxes, appState.faceBoxes);
+                }
             });
             
             toggleFace.addEventListener('change', () => {
                 settings.showFaces = toggleFace.checked;
+                if (appState.isRunning) {
+                    // Vẽ lại ngay lập tức với cài đặt mới
+                    drawDetections(appState.personBoxes, appState.faceBoxes);
+                }
             });
             
             toggleConfidence.addEventListener('change', () => {
                 settings.showConfidence = toggleConfidence.checked;
+                if (appState.isRunning) {
+                    // Vẽ lại ngay lập tức với cài đặt mới
+                    drawDetections(appState.personBoxes, appState.faceBoxes);
+                }
             });
+        }
+        
+        // Thiết lập FPS counter
+        function setupFpsCounter() {
+            // Hủy bỏ timer cũ nếu có
+            if (appState.fpsTimerId) {
+                clearInterval(appState.fpsTimerId);
+            }
             
-            // Thiết lập FPS counter update mỗi giây
-            fpsUpdateTimer = setInterval(updateFPS, 1000);
+            // Thiết lập timer mới
+            frameCount = 0;
+            lastFrameTime = performance.now();
+            
+            appState.fpsTimerId = setInterval(() => {
+                const currentTime = performance.now();
+                const elapsedTime = (currentTime - lastFrameTime) / 1000;
+                
+                if (elapsedTime > 0) {
+                    const fps = Math.round(frameCount / elapsedTime);
+                    fpsCounterElement.textContent = fps;
+                    
+                    // Reset counters
+                    frameCount = 0;
+                    lastFrameTime = currentTime;
+                }
+            }, 1000);
+        }
+        
+        // Đặt lại canvas
+        function resetCanvas() {
+            // Đảm bảo canvas có kích thước đúng với container
+            const container = document.getElementById('videoContainer');
+            overlay.width = container.clientWidth;
+            overlay.height = container.clientHeight;
+            
+            // Xóa canvas
+            ctx.clearRect(0, 0, overlay.width, overlay.height);
+            
+            // Đặt lại các thống kê
+            personCountElement.textContent = '0';
+            faceCountElement.textContent = '0';
+            fpsCounterElement.textContent = '0';
+            
+            // Đặt lại danh sách boxes
+            appState.personBoxes = [];
+            appState.faceBoxes = [];
         }
         
         // Bắt đầu camera
@@ -466,22 +535,33 @@
                     }
                 };
                 
+                // Dừng stream cũ nếu đang chạy
                 if (stream) {
                     stopCamera();
                 }
                 
+                // Bắt đầu stream mới
                 stream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = stream;
+                
+                // Chờ video load
+                await new Promise(resolve => {
+                    video.onloadedmetadata = resolve;
+                });
                 
                 await video.play();
                 
                 // Cập nhật kích thước canvas phù hợp với video thực tế
-                overlay.width = video.videoWidth;
-                overlay.height = video.videoHeight;
+                overlay.width = video.videoWidth || 640;
+                overlay.height = video.videoHeight || 480;
+                
+                // Cập nhật trạng thái ứng dụng
+                appState.isRunning = true;
                 
                 // Bắt đầu xử lý frame
                 startProcessing();
                 
+                // Cập nhật UI
                 startButton.disabled = true;
                 stopButton.disabled = false;
             } catch (error) {
@@ -492,66 +572,61 @@
         
         // Dừng camera
         function stopCamera() {
+            // Dừng stream video
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
                 stream = null;
                 video.srcObject = null;
             }
             
+            // Dừng xử lý frame
             stopProcessing();
-            clearCanvas();
             
+            // Dừng đếm FPS
+            if (appState.fpsTimerId) {
+                clearInterval(appState.fpsTimerId);
+                appState.fpsTimerId = null;
+            }
+            
+            // Đặt lại canvas và trạng thái
+            resetCanvas();
+            appState.isRunning = false;
+            
+            // Cập nhật UI
             startButton.disabled = false;
             stopButton.disabled = true;
         }
         
         // Bắt đầu xử lý frame
         function startProcessing() {
-            if (isProcessing) return;
-            isProcessing = true;
+            if (appState.isProcessing) return;
             
-            // Reset frame counter
-            frameCount = 0;
-            lastFrameTime = performance.now();
+            appState.isProcessing = true;
             
-            // Bắt đầu vòng lặp xử lý
-            processFrames();
+            // Thiết lập FPS counter
+            setupFpsCounter();
+            
+            // Bắt đầu vòng lặp xử lý frame
+            processFrame();
         }
         
         // Dừng xử lý frame
         function stopProcessing() {
-            isProcessing = false;
-            if (animationFrameId) {
-                cancelAnimationFrame(animationFrameId);
-                animationFrameId = null;
-            }
-        }
-        
-        // Xóa canvas
-        function clearCanvas() {
-            ctx.clearRect(0, 0, overlay.width, overlay.height);
-            personCountElement.textContent = '0';
-            faceCountElement.textContent = '0';
-        }
-        
-        // Cập nhật FPS
-        function updateFPS() {
-            const currentTime = performance.now();
-            const elapsedTime = (currentTime - lastFrameTime) / 1000;
+            appState.isProcessing = false;
             
-            if (elapsedTime > 0) {
-                const fps = Math.round(frameCount / elapsedTime);
-                fpsCounterElement.textContent = fps;
-                
-                // Reset counters
-                frameCount = 0;
-                lastFrameTime = currentTime;
+            // Hủy bỏ timer đang chờ xử lý
+            if (appState.processingTimerId) {
+                clearTimeout(appState.processingTimerId);
+                appState.processingTimerId = null;
             }
         }
         
-        // Xử lý frame và gửi lên server
-        async function processFrames() {
-            if (!isProcessing) return;
+        // Xử lý một frame và lên lịch frame tiếp theo
+        async function processFrame() {
+            // Kiểm tra xem có đang xử lý không
+            if (!appState.isProcessing || !appState.isRunning) {
+                return;
+            }
             
             const startTime = performance.now();
             
@@ -559,20 +634,31 @@
                 // Chụp frame từ video
                 const canvas = document.createElement('canvas');
                 const tempCtx = canvas.getContext('2d');
+                
+                // Kiểm tra xem video đã sẵn sàng chưa
+                if (video.videoWidth === 0 || video.videoHeight === 0) {
+                    // Video chưa sẵn sàng, thử lại sau
+                    appState.processingTimerId = setTimeout(processFrame, 100);
+                    return;
+                }
+                
+                // Thiết lập kích thước canvas phù hợp
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
                 
+                // Vẽ frame hiện tại vào canvas tạm
                 tempCtx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 
-                // Chuyển đổi canvas thành blob để gửi lên server
+                // Chuyển đổi canvas thành blob
                 const blob = await new Promise(resolve => {
                     canvas.toBlob(resolve, 'image/jpeg', 0.8);
                 });
                 
+                // Chuẩn bị dữ liệu để gửi
                 const formData = new FormData();
                 formData.append('file', blob, 'frame.jpg');
                 
-                // Gửi frame lên server
+                // Gửi frame lên server để xử lý
                 const response = await fetch(settings.serverUrl, {
                     method: 'POST',
                     body: formData
@@ -582,35 +668,41 @@
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 
-                // Xử lý kết quả
+                // Xử lý kết quả từ server
                 const result = await response.json();
                 
-                // Vẽ các khung và cập nhật thống kê
-                drawDetections(result.person_boxes, result.face_boxes);
+                // Lưu kết quả vào trạng thái ứng dụng
+                appState.personBoxes = result.person_boxes || [];
+                appState.faceBoxes = result.face_boxes || [];
+                
+                // Vẽ các kết quả nhận diện
+                drawDetections(appState.personBoxes, appState.faceBoxes);
+                
+                // Cập nhật thống kê
                 updateStats(result.persons, result.faces);
                 
-                // Tăng bộ đếm frame
+                // Tăng bộ đếm frame cho tính toán FPS
                 frameCount++;
                 
-                // Tính thời gian xử lý
+                // Tính thời gian xử lý frame
                 const processingTime = performance.now() - startTime;
                 
-                // Tính toán thời gian chờ để đạt được FPS mong muốn
+                // Tính thời gian chờ để đạt được FPS mong muốn
                 const targetFrameTime = 1000 / settings.frameRate;
                 const delayTime = Math.max(0, targetFrameTime - processingTime);
                 
-                // Đặt hẹn giờ cho frame tiếp theo
-                setTimeout(() => {
-                    animationFrameId = requestAnimationFrame(processFrames);
-                }, delayTime);
+                // Lên lịch xử lý frame tiếp theo nếu ứng dụng vẫn đang chạy
+                if (appState.isProcessing && appState.isRunning) {
+                    appState.processingTimerId = setTimeout(processFrame, delayTime);
+                }
                 
             } catch (error) {
                 console.error('Lỗi khi xử lý frame:', error);
                 
-                // Nếu gặp lỗi, thử lại sau một thời gian
-                setTimeout(() => {
-                    animationFrameId = requestAnimationFrame(processFrames);
-                }, 1000);
+                // Nếu có lỗi, thử lại sau 1 giây nếu ứng dụng vẫn đang chạy
+                if (appState.isProcessing && appState.isRunning) {
+                    appState.processingTimerId = setTimeout(processFrame, 1000);
+                }
             }
         }
         
@@ -622,11 +714,16 @@
         
         // Vẽ các kết quả nhận diện
         function drawDetections(personBoxes, faceBoxes) {
-            // Xóa canvas trước khi vẽ
+            // Chỉ vẽ khi ứng dụng đang chạy
+            if (!appState.isRunning) {
+                return;
+            }
+            
+            // Xóa canvas trước khi vẽ mới
             ctx.clearRect(0, 0, overlay.width, overlay.height);
             
             // Vẽ person boxes nếu được bật
-            if (settings.showPersons) {
+            if (settings.showPersons && personBoxes && personBoxes.length > 0) {
                 personBoxes.forEach(box => {
                     const [x1, y1, x2, y2] = box.coords;
                     const width = x2 - x1;
@@ -654,7 +751,7 @@
             }
             
             // Vẽ face boxes nếu được bật
-            if (settings.showFaces) {
+            if (settings.showFaces && faceBoxes && faceBoxes.length > 0) {
                 faceBoxes.forEach(box => {
                     const [x1, y1, x2, y2] = box.coords;
                     const width = x2 - x1;

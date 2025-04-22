@@ -11,7 +11,7 @@ import { resetStats } from './stats.js';
 
 // DOM elements
 let video, overlay, ctx, cameraSelect, toggleRearCamera;
-let togglePerson, toggleFace, toggleConfidence;
+let togglePerson, toggleFace, toggleConfidence, toggleEmotions;
 
 /**
  * Initialize UI module
@@ -26,6 +26,7 @@ export function initUI(elements) {
     togglePerson = elements.togglePerson;
     toggleFace = elements.toggleFace;
     toggleConfidence = elements.toggleConfidence;
+    toggleEmotions = elements.toggleEmotions;
 }
 
 /**
@@ -78,6 +79,15 @@ export function setupEventListeners() {
     
     toggleConfidence.addEventListener('change', () => {
         config.showConfidence = toggleConfidence.checked;
+        if (state.isRunning) {
+            // Redraw immediately with new settings
+            drawDetections(state.personBoxes, state.faceBoxes);
+        }
+    });
+    
+    // Thêm xử lý sự kiện cho hiển thị cảm xúc / Add emotion toggle event listener
+    toggleEmotions.addEventListener('change', () => {
+        config.showEmotions = toggleEmotions.checked;
         if (state.isRunning) {
             // Redraw immediately with new settings
             drawDetections(state.personBoxes, state.faceBoxes);

@@ -6,6 +6,7 @@ import os
 from app.box_detector import Detector
 import numpy as np
 import cv2
+import base64
 
 app = FastAPI()
 detector = Detector()
@@ -21,12 +22,15 @@ app.add_middleware(
 # API endpoint for processing frames
 @app.post("/process_frame")
 async def process_frame(file: UploadFile = File(...)):
+    # Đọc nội dung file ảnh / Read image file content
     contents = await file.read()
     nparr = np.frombuffer(contents, np.uint8)
     frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     
+    # Xử lý khung hình / Process the frame
     person_count, face_count, person_boxes, face_boxes = detector.process_frame(frame)
     
+    # Trả về kết quả / Return results
     return {
         "persons": person_count,
         "faces": face_count,
@@ -35,8 +39,8 @@ async def process_frame(file: UploadFile = File(...)):
             for (coords, conf) in person_boxes
         ],
         "face_boxes": [
-            {"coords": coords, "confidence": conf}
-            for (coords, conf) in face_boxes
+            {"coords": coords, "confidence": conf, "emotion": emotion}
+            for (coords, conf, emotion) in face_boxes
         ]
     }
 
@@ -45,10 +49,8 @@ async def process_frame(file: UploadFile = File(...)):
 async def health_check():
     return {"status": "ok"}
 
-# Define frontend directory
+# Mount the static files directory
 frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
-
-# Mount static files
 app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
 
 # Serve index.html at the root

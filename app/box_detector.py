@@ -1,17 +1,25 @@
 import numpy as np
-from .models import load_models
+import cv2
+from .models import load_models, get_emotion_model_details
+from .config import EMOTION_LABELS
 
 class Detector:
-    """Xử lý nhận diện người và khuôn mặt / Detection handler"""
+    """Xử lý nhận diện người, khuôn mặt và cảm xúc / Detection handler"""
     def __init__(self):
         """
-        Khởi tạo Detector bằng cách tải các mô hình YOLO.
-        Initializes the Detector by loading the YOLO models.
-
-        Đây là hàm khởi tạo của lớp Detector. Nó tải hai mô hình YOLO: một cho việc nhận diện người và một cho việc nhận diện khuôn mặt.
-        This is the constructor of the Detector class. It loads two YOLO models: one for person detection and one for face detection.
+        Khởi tạo Detector bằng cách tải các mô hình.
+        Initializes the Detector by loading the models.
         """
-        self.person_model, self.face_model = load_models()  # Tải mô hình / Load models
+        # Tải các mô hình / Load models
+        self.person_model, self.face_model, self.emotion_interpreter = load_models()
+        
+        # Lấy thông tin chi tiết về mô hình cảm xúc / Get emotion model details
+        self.emotion_input_details, self.emotion_output_details = get_emotion_model_details(self.emotion_interpreter)
+        
+        # Lấy kích thước đầu vào của mô hình cảm xúc / Get emotion model input size
+        self.emotion_input_shape = self.emotion_input_details[0]['shape']
+        self.emotion_height = self.emotion_input_shape[1]
+        self.emotion_width = self.emotion_input_shape[2]
     
     def process_frame(self, frame):
         """
@@ -23,87 +31,50 @@ class Detector:
 
         Returns:
             tuple: Một tuple chứa:
-                   - annotated_frame (np.ndarray): Khung hình đã được vẽ các khung nhận diện. Annotated frame with bounding boxes.
                    - person_count (int): Số lượng người được nhận diện. Number of detected persons.
                    - face_count (int): Số lượng khuôn mặt được nhận diện. Number of detected faces.
-                   - face_boxes (list): Danh sách các khung khuôn mặt, mỗi khung là một tuple (coords, conf). List of face bounding boxes, each box is a tuple (coords, conf).
-            
-        Đây là hàm xử lý chính của lớp Detector. Nó nhận một khung hình (ảnh) làm đầu vào, thực hiện nhận diện người và khuôn mặt, và trả về kết quả.
-        This is the main processing function of the Detector class. It takes a frame (image) as input, performs person and face detection, and returns the results.
-        
-        Thuật toán:
-        1. Nhận diện người bằng mô hình person_model.
-        2. Với mỗi người được nhận diện, vẽ khung lên ảnh.
-        3. Chuẩn bị các vùng quan tâm (ROI) từ khung người.
-        4. Nhận diện khuôn mặt trong các ROI bằng mô hình face_model.
-        5. Chuyển đổi tọa độ khuôn mặt từ cục bộ (trong ROI) sang toàn cục (trong khung hình).
-        6. Trả về số lượng người, số lượng khuôn mặt và danh sách các khung khuôn mặt.
-        Algorithm:
-        1. Detect persons using the person_model.
-        2. For each detected person, draw a bounding box on the image.
-        3. Prepare regions of interest (ROIs) from the person bounding boxes.
-        4. Detect faces within the ROIs using the face_model.
-        5. Convert face coordinates from local (within the ROI) to global (within the frame).
-        6. Return the number of persons, the number of faces, and the list of face bounding boxes.
+                   - person_boxes (list): Danh sách các khung người. List of person bounding boxes.
+                   - face_boxes (list): Danh sách các khung khuôn mặt với thông tin cảm xúc. List of face bounding boxes with emotion info.
         """
-        # Nhận diện người / Detect persons
-        person_results = self.person_model(frame, classes=[0], conf=0.3, imgsz=640, half=True, verbose=False)
-        
-        person_count = 0
-        face_count = 0
-        annotated_frame = frame.copy()
-        face_boxes = []  # Danh sách khung khuôn mặt / Face boxes list
-        person_boxes = []
-        
-        if person_results:
-            for person in person_results:
-                # Lấy tọa độ khung người / Get person boxes
-                boxes = person.boxes.xyxy.cpu().numpy() #boxes is a numpy array with shape (n,4)
-                confs = person.boxes.conf.cpu().numpy() #confidence for person box
-                person_count += len(boxes)
+        try:
+            # Nhận diện người / Detect persons
+            person_results = self.person_model(frame, classes=[0], conf=0.3, imgsz=640, half=True, verbose=False)
+            
+            person_count = 0
+            face_count = 0
+            face_boxes = []  # Danh sách khung khuôn mặt / Face boxes list
+            person_boxes = []
+            
+            if person_results:
+                for person in person_results:
+                    # Lấy tọa độ khung người / Get person boxes
+                    boxes = person.boxes.xyxy.cpu().numpy() #boxes is a numpy array with shape (n,4)
+                    confs = person.boxes.conf.cpu().numpy() #confidence for person box
+                    person_count += len(boxes)
 
-                for box, conf in zip(boxes, confs):
-                    x1, y1, x2, y2 = map(int, box)
-                    person_boxes.append(((x1, y1, x2, y2), float(conf)))
-                
-                # Chuẩn bị vùng quan tâm (ROI) / Prepare ROIs
-                valid_rois, valid_indices = self._prepare_rois(frame, boxes)
-                # Nhận diện khuôn mặt trong ROI / Detect faces in ROIs
-                face_data = self._detect_faces(valid_rois, valid_indices, boxes)
-                face_count += face_data["count"]
-                face_boxes.extend(face_data["boxes"])
-        
-        return person_count, face_count, person_boxes, face_boxes
+                    for box, conf in zip(boxes, confs):
+                        x1, y1, x2, y2 = map(int, box)
+                        person_boxes.append(((x1, y1, x2, y2), float(conf)))
+                    
+                    # Chuẩn bị vùng quan tâm (ROI) / Prepare ROIs
+                    valid_rois, valid_indices = self._prepare_rois(frame, boxes)
+                    # Nhận diện khuôn mặt và cảm xúc trong ROI / Detect faces and emotions in ROIs
+                    face_data = self._detect_faces_and_emotions(frame, valid_rois, valid_indices, boxes)
+                    face_count += face_data["count"]
+                    face_boxes.extend(face_data["boxes"])
+            
+            return person_count, face_count, person_boxes, face_boxes
+            
+        except Exception as e:
+            # Xử lý lỗi tại đây để tránh gây đơ ứng dụng / Handle errors to avoid freezing
+            print(f"Error in process_frame: {e}")
+            # Trả về giá trị mặc định an toàn / Return safe default values
+            return 0, 0, [], []
     
     def _prepare_rois(self, frame, boxes):
         """
         Chuẩn bị các vùng ảnh hợp lệ từ khung người.
         Extracts valid image regions from person bounding boxes.
-
-        Args:
-            frame (np.ndarray): Khung hình đầu vào (ảnh). Input frame (image).
-            boxes (np.ndarray): Mảng các khung người, mỗi khung là [x1, y1, x2, y2]. Array of person bounding boxes, each box is [x1, y1, x2, y2].
-
-        Returns:
-            tuple: Một tuple chứa:
-                   - valid_rois (list): Danh sách các vùng ảnh hợp lệ (ROI). List of valid image regions (ROIs).
-                   - valid_indices (list): Danh sách các chỉ số tương ứng với các khung người hợp lệ. List of indices corresponding to the valid person boxes.
-        
-        Đây là hàm trích xuất các vùng quan tâm (ROI) từ các khung người. Nó kiểm tra tính hợp lệ của các khung và cắt các vùng ảnh tương ứng.
-        This function extracts regions of interest (ROIs) from the person bounding boxes. It checks the validity of the boxes and crops the corresponding image regions.
-        
-        Thuật toán:
-        1. Duyệt qua từng khung người.
-        2. Kiểm tra xem khung có hợp lệ không (x2 > x1, y2 > y1, x1 >= 0, y1 >= 0).
-        3. Nếu hợp lệ, cắt vùng ảnh tương ứng từ khung hình và thêm vào danh sách valid_rois.
-        4. Thêm chỉ số của khung vào danh sách valid_indices.
-        5. Trả về danh sách các ROI và danh sách các chỉ số.
-        Algorithm:
-        1. Iterate through each person bounding box.
-        2. Check if the box is valid (x2 > x1, y2 > y1, x1 >= 0, y1 >= 0).
-        3. If valid, crop the corresponding image region from the frame and add it to the valid_rois list.
-        4. Add the index of the box to the valid_indices list.
-        5. Return the list of ROIs and the list of indices.
         """
         valid_rois = []
         valid_indices = []
@@ -114,58 +85,132 @@ class Detector:
                 valid_indices.append(i)
         return valid_rois, valid_indices
     
-    def _detect_faces(self, rois, indices, boxes):
+    def _detect_faces_and_emotions(self, original_frame, rois, indices, boxes):
         """
-        Nhận diện khuôn mặt và tính toán tọa độ toàn cục.
-        Detects faces and calculates global coordinates.
+        Nhận diện khuôn mặt, cảm xúc và tính toán tọa độ toàn cục.
+        Detects faces and emotions and calculates global coordinates.
 
         Args:
+            original_frame (np.ndarray): Khung hình gốc. Original frame.
             rois (list): Danh sách các vùng ảnh (ROI). List of image regions (ROIs).
-            indices (list): Danh sách các chỉ số tương ứng với các khung người. List of indices corresponding to the person boxes.
-            boxes (np.ndarray): Mảng các khung người, mỗi khung là [x1, y1, x2, y2]. Array of person bounding boxes, each box is [x1, y1, x2, y2].
+            indices (list): Danh sách các chỉ số tương ứng với các khung người. List of indices corresponding to person boxes.
+            boxes (np.ndarray): Mảng các khung người. Array of person bounding boxes.
 
         Returns:
             dict: Một dictionary chứa:
                   - count (int): Số lượng khuôn mặt được nhận diện. Number of detected faces.
-                  - boxes (list): Danh sách các khung khuôn mặt, mỗi khung là một tuple (coords, conf). List of face bounding boxes, each box is a tuple (coords, conf).
-        
-        Đây là hàm nhận diện khuôn mặt trong các ROI và chuyển đổi tọa độ khuôn mặt từ cục bộ (trong ROI) sang toàn cục (trong khung hình).
-        This function detects faces within the ROIs and converts the face coordinates from local (within the ROI) to global (within the frame).
-        
-        Thuật toán:
-        1. Nếu có ROI, thực hiện nhận diện khuôn mặt bằng mô hình face_model.
-        2. Duyệt qua từng kết quả nhận diện khuôn mặt.
-        3. Nếu có khuôn mặt được nhận diện, tăng số lượng khuôn mặt.
-        4. Lấy chỉ số gốc của khung người chứa ROI.
-        5. Lấy tọa độ của khung người đó.
-        6. Duyệt qua từng khung khuôn mặt trong kết quả.
-        7. Chuyển đổi tọa độ khuôn mặt từ cục bộ sang toàn cục bằng cách cộng tọa độ của khung người.
-        8. Thêm tọa độ toàn cục và độ tin cậy vào danh sách face_boxes.
-        9. Trả về số lượng khuôn mặt và danh sách các khung khuôn mặt.
-        Algorithm:
-        1. If there are ROIs, perform face detection using the face_model.
-        2. Iterate through each face detection result.
-        3. If faces are detected, increment the face count.
-        4. Get the original index of the person box containing the ROI.
-        5. Get the coordinates of that person box.
-        6. Iterate through each face box in the result.
-        7. Convert the face coordinates from local to global by adding the coordinates of the person box.
-        8. Add the global coordinates and confidence to the face_boxes list.
-        9. Return the face count and the list of face bounding boxes.
+                  - boxes (list): Danh sách các khung khuôn mặt với thông tin cảm xúc. List of face bounding boxes with emotion info.
         """
         face_boxes = []
         face_count = 0
-        if rois:
-            face_results = self.face_model(rois, stream=True, conf=0.3, imgsz=320, half=True, verbose=False)
-            for idx, face in enumerate(face_results):
-                if len(face.boxes) > 0:
-                    face_count += len(face.boxes)
-                    orig_idx = indices[idx]
-                    px1, py1 = int(boxes[orig_idx][0]), int(boxes[orig_idx][1])
-                    # Chuyển tọa độ cục bộ sang toàn cục / Convert to global coordinates
-                    for box in face.boxes:
-                        fx1, fy1, fx2, fy2 = map(int, box.xyxy[0].cpu().numpy())
-                        conf = float(box.conf[0].cpu().numpy())
-                        global_coords = (px1 + fx1, py1 + fy1, px1 + fx2, py1 + fy2)
-                        face_boxes.append((global_coords, conf))
+        
+        if not rois:
+            return {"count": 0, "boxes": []}
+        
+        try:
+            # Thay đổi: Xử lý từng ROI riêng biệt thay vì dùng batch processing
+            for idx, roi in enumerate(rois):
+                try:
+                    # Xử lý từng ROI một
+                    face_result = self.face_model(roi, conf=0.3, imgsz=160, half=True, verbose=False)
+                    
+                    if len(face_result[0].boxes) > 0:
+                        face_count += len(face_result[0].boxes)
+                        orig_idx = indices[idx]
+                        px1, py1 = int(boxes[orig_idx][0]), int(boxes[orig_idx][1])
+                        
+                        # Duyệt qua từng khuôn mặt phát hiện được / Iterate through each detected face
+                        for box in face_result[0].boxes:
+                            fx1, fy1, fx2, fy2 = map(int, box.xyxy[0].cpu().numpy())
+                            conf = float(box.conf[0].cpu().numpy())
+                            
+                            # Lấy vùng ảnh khuôn mặt để nhận diện cảm xúc / Get face ROI for emotion detection
+                            if fx1 < fx2 and fy1 < fy2 and fx1 >= 0 and fy1 >= 0 and fx2 <= roi.shape[1] and fy2 <= roi.shape[0]:
+                                face_roi = roi[fy1:fy2, fx1:fx2]
+                                
+                                # Chỉ xử lý nếu vùng ảnh khuôn mặt hợp lệ / Only process if face ROI is valid
+                                if face_roi.size > 0 and face_roi.shape[0] > 0 and face_roi.shape[1] > 0:
+                                    emotion = self._detect_emotion(face_roi)
+                                else:
+                                    emotion = "Không xác định"  # Không thể xác định cảm xúc / Unknown emotion
+                            else:
+                                emotion = "Không xác định"
+                            
+                            # Tọa độ toàn cục cho khuôn mặt / Global coordinates for the face
+                            global_coords = (px1 + fx1, py1 + fy1, px1 + fx2, py1 + fy2)
+                            face_boxes.append((global_coords, conf, emotion))
+                
+                except Exception as e:
+                    print(f"Error processing ROI {idx}: {e}")
+                    continue  # Bỏ qua ROI này và tiếp tục với ROI tiếp theo
+        
+        except Exception as e:
+            print(f"Error in _detect_faces_and_emotions: {e}")
+            return {"count": 0, "boxes": []}
+            
         return {"count": face_count, "boxes": face_boxes}
+    
+    def _detect_emotion(self, face_img):
+        """
+        Phát hiện cảm xúc từ ảnh khuôn mặt sử dụng mô hình TFLite
+        Detect emotion from a face image using the TFLite model
+        
+        Args:
+            face_img (np.ndarray): Vùng ảnh khuôn mặt / Face image region
+            
+        Returns:
+            str: Nhãn cảm xúc dự đoán / Predicted emotion label
+        """
+        try:
+            # Tiền xử lý ảnh khuôn mặt cho mô hình cảm xúc / Preprocess face image for emotion model
+            
+            # Kiểm tra xem cần chuyển sang ảnh xám không / Check if grayscale is needed
+            if self.emotion_input_shape[-1] == 1:
+                face_img = cv2.cvtColor(face_img, cv2.COLOR_BGR2GRAY)
+            
+            # Thay đổi kích thước ảnh theo yêu cầu đầu vào / Resize to expected input dimensions
+            resized_face = cv2.resize(face_img, (self.emotion_width, self.emotion_height))
+            
+            # Kiểm tra kiểu dữ liệu đầu vào từ chi tiết / Check input type from details
+            input_dtype = self.emotion_input_details[0]['dtype']
+            
+            # Xử lý tùy thuộc vào kiểu dữ liệu đầu vào / Process based on input data type
+            if input_dtype == np.float32:
+                # Chuẩn hóa giá trị pixel cho mô hình float / Normalize pixel values for float models
+                normalized_face = resized_face.astype(np.float32) / 255.0
+            elif input_dtype == np.uint8:
+                # Đối với mô hình lượng tử hóa, giữ nguyên dạng uint8 / For quantized models, keep as uint8
+                normalized_face = resized_face.astype(np.uint8)
+            else:
+                # Mặc định chuẩn hóa kiểu float32 / Default to float32 normalization
+                normalized_face = resized_face.astype(np.float32) / 255.0
+            
+            # Thay đổi hình dạng để phù hợp với đầu vào / Reshape to match input tensor shape
+            if self.emotion_input_shape[-1] == 1:
+                input_tensor = normalized_face.reshape(1, self.emotion_height, self.emotion_width, 1)
+            else:
+                input_tensor = normalized_face.reshape(1, self.emotion_height, self.emotion_width, 3)
+            
+            # Đặt tensor đầu vào / Set input tensor
+            self.emotion_interpreter.set_tensor(self.emotion_input_details[0]['index'], input_tensor)
+            
+            # Chạy suy luận / Run inference
+            self.emotion_interpreter.invoke()
+            
+            # Lấy tensor đầu ra / Get output tensor
+            output_tensor = self.emotion_interpreter.get_tensor(self.emotion_output_details[0]['index'])
+            
+            # Lấy cảm xúc dự đoán / Get predicted emotion
+            emotion_idx = np.argmax(output_tensor)
+            
+            # Đảm bảo chỉ số nằm trong giới hạn của danh sách nhãn / Ensure index is within range of labels
+            if 0 <= emotion_idx < len(EMOTION_LABELS):
+                emotion_label = EMOTION_LABELS[emotion_idx]
+            else:
+                emotion_label = "Không xác định"
+            
+            return emotion_label
+            
+        except Exception as e:
+            print(f"Lỗi khi nhận diện cảm xúc: {e}")
+            return "Không xác định"

@@ -108,11 +108,10 @@ export async function processFrame() {
         drawDetections(state.personBoxes, state.faceBoxes);
         
         // Update statistics
-        updateStats(result.persons, result.faces);
+        updateStats(result.persons, result.faces, state.faceBoxes);
         
         // Increment frame counter for FPS calculation
         state.frameCount++;
-        console.log("Frame processed, count:", state.frameCount);
         
         // Calculate frame processing time
         const processingTime = performance.now() - startTime;
@@ -139,7 +138,7 @@ export async function processFrame() {
 /**
  * Draw detection boxes for persons and faces
  * @param {Array} personBoxes - Person detection boxes
- * @param {Array} faceBoxes - Face detection boxes
+ * @param {Array} faceBoxes - Face detection boxes with emotion data
  */
 export function drawDetections(personBoxes, faceBoxes) {
     // Only draw when application is running
@@ -190,12 +189,32 @@ export function drawDetections(personBoxes, faceBoxes) {
             ctx.lineWidth = 3;
             ctx.strokeRect(x1, y1, width, height);
             
-            // Draw label if confidence display is enabled
+            // Compose label text
+            let labelParts = [];
             if (config.showConfidence) {
-                // Create label background
+                labelParts.push(`Mặt ${box.confidence.toFixed(2)}`);
+            }
+            
+            // Add emotion if enabled and available
+            if (config.showEmotions && box.emotion) {
+                labelParts.push(box.emotion);
+                
+                // Use emotion-specific color if available
+                if (config.emotionColors[box.emotion]) {
+                    ctx.fillStyle = config.emotionColors[box.emotion];
+                } else {
+                    ctx.fillStyle = config.emotionColor;
+                }
+            } else {
                 ctx.fillStyle = config.faceColor;
-                const label = `Mặt ${box.confidence.toFixed(2)}`;
+            }
+            
+            // Only draw label if we have something to show
+            if (labelParts.length > 0) {
+                const label = labelParts.join(' - ');
                 const textWidth = ctx.measureText(label).width + 10;
+                
+                // Create label background (position above the face box)
                 ctx.fillRect(x1, y1 - 20, textWidth, 20);
                 
                 // Draw text

@@ -173,5 +173,7 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
-dataset/train/*
-dataset/val/*
+dataset/widerface-yolo/train/*
+dataset/widerface-yolo/val/*
+dataset/fer-2013/train/*
+dataset/fer-2013/test/*

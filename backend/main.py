@@ -1,14 +1,16 @@
-import numpy as np
-import cv2
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
 from app.box_detector import Detector
-import base64
+import numpy as np
+import cv2
 
 app = FastAPI()
 detector = Detector()
 
-# CORS settings để frontend kết nối
+# CORS settings
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -16,17 +18,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# API endpoint for processing frames
 @app.post("/process_frame")
 async def process_frame(file: UploadFile = File(...)):
-    # Convert image to numpy array
     contents = await file.read()
     nparr = np.frombuffer(contents, np.uint8)
     frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     
-    # Process frame (chỉ lấy metadata, không vẽ khung)
     person_count, face_count, person_boxes, face_boxes = detector.process_frame(frame)
     
-    # Trả về tọa độ và metadata
     return {
         "persons": person_count,
         "faces": face_count,
@@ -39,3 +39,19 @@ async def process_frame(file: UploadFile = File(...)):
             for (coords, conf) in face_boxes
         ]
     }
+
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
+
+# Define frontend directory
+frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
+
+# Mount static files
+app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
+
+# Serve index.html at the root
+@app.get("/")
+async def read_index():
+    return FileResponse(os.path.join(frontend_dir, "index.html"))

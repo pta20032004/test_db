@@ -1,6 +1,8 @@
 from os import putenv
+
+# Cấu hình môi trường cho AMD GPU / Environment setup for AMD GPUs
 putenv("HSA_OVERRIDE_GFX_VERSION", "10.3.0")
-putenv("ROCM_PATH", "/opt/rocm-6.3.3")
+putenv("ROCM_PATH", "/opt/rocm-6.4.0/")
 
 import numpy as np
 import cv2

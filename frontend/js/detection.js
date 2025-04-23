@@ -149,6 +149,17 @@ export function drawDetections(personBoxes, faceBoxes) {
     // Clear canvas before drawing
     ctx.clearRect(0, 0, overlay.width, overlay.height);
     
+    // Get font size from config
+    const fontSize = config.isMobile ? 
+                    (config.mobileLabelFontSize || 14) : 
+                    (config.desktopLabelFontSize || 16);
+    
+    // Calculate label height and padding
+    const labelPadding = config.labelPadding || 6;
+    const labelMargin = config.labelMargin || 8;
+    const labelHeight = fontSize + labelPadding * 2;
+    const borderWidth = config.borderWidth || 4; // Độ dày của đường viền
+    
     // Draw person boxes if enabled
     if (config.showPersons && personBoxes && personBoxes.length > 0) {
         personBoxes.forEach(box => {
@@ -158,21 +169,25 @@ export function drawDetections(personBoxes, faceBoxes) {
             
             // Draw person box
             ctx.strokeStyle = config.personColor;
-            ctx.lineWidth = 3;
+            ctx.lineWidth = borderWidth;
             ctx.strokeRect(x1, y1, width, height);
             
             // Draw label if confidence display is enabled
             if (config.showConfidence) {
+                // Set font size for label
+                ctx.font = `bold ${fontSize}px Arial`;
+                
+                // Create label text
+                const label = `Người ${box.confidence.toFixed(2)}`;
+                const textWidth = ctx.measureText(label).width + labelPadding * 2;
+                
                 // Create label background
                 ctx.fillStyle = config.personColor;
-                const label = `Người ${box.confidence.toFixed(2)}`;
-                const textWidth = ctx.measureText(label).width + 10;
-                ctx.fillRect(x1, y1 - 20, textWidth, 20);
+                ctx.fillRect(x1, y1 - labelHeight - labelMargin, textWidth, labelHeight);
                 
                 // Draw text
                 ctx.fillStyle = '#FFFFFF';
-                ctx.font = 'bold 12px Arial';
-                ctx.fillText(label, x1 + 5, y1 - 5);
+                ctx.fillText(label, x1 + labelPadding, y1 - labelMargin - labelPadding);
             }
         });
     }
@@ -186,7 +201,7 @@ export function drawDetections(personBoxes, faceBoxes) {
             
             // Draw face box
             ctx.strokeStyle = config.faceColor;
-            ctx.lineWidth = 3;
+            ctx.lineWidth = borderWidth;
             ctx.strokeRect(x1, y1, width, height);
             
             // Compose label text
@@ -211,16 +226,18 @@ export function drawDetections(personBoxes, faceBoxes) {
             
             // Only draw label if we have something to show
             if (labelParts.length > 0) {
+                // Set font size for label
+                ctx.font = `bold ${fontSize}px Arial`;
+                
                 const label = labelParts.join(' - ');
-                const textWidth = ctx.measureText(label).width + 10;
+                const textWidth = ctx.measureText(label).width + labelPadding * 2;
                 
                 // Create label background (position above the face box)
-                ctx.fillRect(x1, y1 - 20, textWidth, 20);
+                ctx.fillRect(x1, y1 - labelHeight - labelMargin, textWidth, labelHeight);
                 
                 // Draw text
                 ctx.fillStyle = '#FFFFFF';
-                ctx.font = 'bold 12px Arial';
-                ctx.fillText(label, x1 + 5, y1 - 5);
+                ctx.fillText(label, x1 + labelPadding, y1 - labelMargin - labelPadding);
             }
         });
     }

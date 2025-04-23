@@ -1,9 +1,3 @@
-from os import putenv
-
-# Cấu hình môi trường cho AMD GPU / Environment setup for AMD GPUs
-putenv("HSA_OVERRIDE_GFX_VERSION", "10.3.0")
-putenv("ROCM_PATH", "/opt/rocm-6.3.3/")
-
 # Đường dẫn mô hình / Model paths
 PERSON_MODEL_PATH = './models/yolo11n.pt'
 FACE_MODEL_PATH = './models/best_face_model.pt'

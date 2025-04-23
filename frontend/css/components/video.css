@@ -32,12 +32,23 @@
 
 .detection-label {
     position: absolute;
-    padding: 2px 6px;
-    font-size: 12px;
+    padding: 4px 8px; /* Tăng padding từ 2px 6px lên 4px 8px */
+    font-size: 18px;  /* Tăng font-size từ 12px lên 16px */
     border-radius: 3px;
     color: white;
     font-weight: bold;
     transform: translateY(-100%);
+    white-space: nowrap; /* Đảm bảo nhãn không bị ngắt dòng */
+    line-height: 1.2;  /* Thêm line-height để cải thiện độ cao */
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3); /* Thêm đổ bóng nhẹ để nổi bật hơn */
+}
+
+/* Thêm media query cho thiết bị di động */
+@media (max-width: 1023px) {
+    .detection-label {
+        font-size: 18px; /* Nhỏ hơn một chút trên mobile */
+        padding: 3px 6px; /* Padding nhỏ hơn trên mobile */
+    }
 }
 
 /* Mobile adjustments */

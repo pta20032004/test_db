@@ -36,7 +36,14 @@ const config = {
     frameRate: isMobile ? 10 : 30, // Lower FPS on mobile devices
     
     // Device info
-    isMobile: isMobile
+    isMobile: isMobile,
+    
+    // Nhãn kết quả nhận diện / Detection label settings
+    desktopLabelFontSize: 16,     // Kích thước chữ trên desktop (px)
+    mobileLabelFontSize: 14,      // Kích thước chữ trên thiết bị di động (px)
+    labelPadding: 6,              // Padding cho nhãn (px)
+    labelMargin: 8,               // Khoảng cách từ nhãn đến khung (px)
+    borderWidth: 4                // Độ dày viền khung (px)
 };
 
 export default config;

@@ -1,7 +1,3 @@
-import os
-os.environ["HSA_OVERRIDE_GFX_VERSION"] = "10.3.0"
-os.environ["ROCM_PATH"] = "/opt/rocm-6.3.3"
-
 from ultralytics import YOLO
 import tensorflow as tf
 from .config import PERSON_MODEL_PATH, FACE_MODEL_PATH, EMOTION_MODEL_PATH

@@ -186,3 +186,4 @@ model.h5
 model.tflite
 saved_model_format
 emotion_model_checkpoint.h5
+run_server.py

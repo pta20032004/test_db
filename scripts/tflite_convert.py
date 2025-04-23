@@ -5,7 +5,7 @@ putenv("ROCM_PATH", "/opt/rocm-6.3.3")
 import tensorflow as tf
 
 # 1. Load và export model
-model = tf.keras.models.load_model('model.h5')
+model = tf.keras.models.load_model('./models/emotion_model_2.h5')
 model.export('saved_model_format')
 
 # 2. Khởi tạo converter từ SavedModel

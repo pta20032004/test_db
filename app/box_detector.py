@@ -1,3 +1,7 @@
+from os import putenv
+putenv("HSA_OVERRIDE_GFX_VERSION", "10.3.0")
+putenv("ROCM_PATH", "/opt/rocm-6.3.3")
+
 import numpy as np
 import cv2
 from .models import load_models, get_emotion_model_details

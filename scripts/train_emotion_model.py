@@ -41,21 +41,21 @@ def create_model(input_shape=(48, 48, 1)):
     
     # Block 1 - Depthwise Separable
     model.add(DepthwiseConv2D(kernel_size=(5, 5), padding='same', input_shape=input_shape))
-    model.add(Conv2D(32, kernel_size=(1, 1), activation='relu'))
+    model.add(Conv2D(16, kernel_size=(1, 1), activation='relu'))
     model.add(BatchNormalization())
     model.add(MaxPooling2D(pool_size=(2, 2)))
     model.add(Dropout(0.1))
     
     # Block 2 - Depthwise Separable
     model.add(DepthwiseConv2D(kernel_size=(3, 3), padding='same'))
-    model.add(Conv2D(64, kernel_size=(1, 1), activation='relu'))
+    model.add(Conv2D(32, kernel_size=(1, 1), activation='relu'))
     model.add(BatchNormalization())
     model.add(MaxPooling2D(pool_size=(2, 2)))
     model.add(Dropout(0.1))
     
     # Block 3 - Depthwise Separable
     model.add(DepthwiseConv2D(kernel_size=(3, 3), padding='same'))
-    model.add(Conv2D(128, kernel_size=(1, 1), activation='relu'))
+    model.add(Conv2D(64, kernel_size=(1, 1), activation='relu'))
     model.add(BatchNormalization())
     model.add(MaxPooling2D(pool_size=(2, 2)))
     model.add(Dropout(0.2))
@@ -63,7 +63,7 @@ def create_model(input_shape=(48, 48, 1)):
     # Output Block
     model.add(GlobalAveragePooling2D())
     model.add(Dropout(0.25))
-    model.add(Dense(64, activation='relu'))
+    model.add(Dense(32, activation='relu'))
     model.add(Dense(7, activation='softmax'))  # 7 emotion classes
     
     model.compile(

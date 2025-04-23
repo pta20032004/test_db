@@ -14,6 +14,7 @@ from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
 import matplotlib.pyplot as plt
 from glob import glob
+
 # Cấu hình môi trường cho AMD GPU / Environment setup for AMD GPUs
 os.environ["HSA_OVERRIDE_GFX_VERSION"] = "10.3.0"
 os.environ["ROCM_PATH"] = "/opt/rocm-6.3.3"

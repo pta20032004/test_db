@@ -1,6 +1,6 @@
 # Đường dẫn mô hình / Model paths
-PERSON_MODEL_PATH = './models/yolo11n.pt'
-FACE_MODEL_PATH = './models/best_face_model.pt'
+PERSON_MODEL_PATH = './models/yolov8n.pt'
+FACE_MODEL_PATH = './models/yolov8p-face.pt'
 EMOTION_MODEL_PATH = './models/emotion_model_2.tflite'
 
 # Thiết lập hiển thị / Visualization settings
